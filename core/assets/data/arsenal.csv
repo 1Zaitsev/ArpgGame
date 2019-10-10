@@ -1,0 +1,4 @@
+__title__,__att_period__,__min_dmg__,__max_dmg__,__crit_chance__,__stan_chance__,__bleed_chance__
+Digger   ,0.3f          ,1          ,3          ,0.3f           ,0f             ,0.2f
+Sword    ,0.5f          ,2          ,4          ,0.1f           ,0f             ,0.1f
+Hammer   ,0.7f          ,2          ,3          ,0.1f           ,0.3f           ,0f

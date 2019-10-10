@@ -1,0 +1,225 @@
+==============================================================================================================================================================
+-Добавить необходимые состояния оглушения и кровотечения
+---------------------------------------------------------
+
+enum State {
+    HUNT, IDLE, WALK, SPRINT, STUN, BLEED
+}
+
+==============================================================================================================================================================
+
+public abstract class Unit implements MapElement {
+//...
+    protected float stunTimer;
+    protected float bleedTimer;
+
+//...
+
+    public void stateToStun() {
+        this.state = State.STUN;
+        this.stunTimer = 5.0f;      //надо вычислять с учётом diffAD и diffLevel
+    }
+
+    public void stateToBleed() {
+        this.state = State.BLEED;
+        this.bleedTimer = 10f;     //надо вычислять с учётом diffAD и diffLevel
+    }
+
+//...
+    public void takeDamage(Unit attacker, int amount, Color color) {
+        int critMod = 1;
+if(this.state != State.BLEED) { // что бы провотечения не вызывало дополнительные дебафы
+        if(MathUtils.random(1) < attacker.getWeapon().getCritChance())		//надо вычислять с учётом diffAD и diffLevel
+            critMod = 2;
+
+        if(MathUtils.random(1) < attacker.getWeapon().getStanChance())		//надо вычислять с учётом diffAD и diffLevel
+            this.stateToStun();
+
+
+        if(MathUtils.random(1) < attacker.getWeapon().getBleedChance())		//надо вычислять с учётом diffAD и diffLevel
+            this.stateToBleed();
+}
+        stats.decreaseHp(amount * critMod);
+	//...
+	}
+
+}
+
+==============================================================================================================================================================
+- шанс перехода цели в эти состояние - харрактеристика оружия атакующего
+------------------------------------------------------------------------
+
+public class Weapon implements Item {
+    private String title;
+    private float attackPeriod;
+    private int minDamage;
+    private int maxDamage;
+    private float critChance;
+    private float stunChance;
+    private float bleedChance;
+
+    @Override
+    public Type getItemType() {
+        return Type.WEAPON;
+    }
+
+    @Override
+    public String getTitle() {
+        return title + " [" + minDamage + "-" + maxDamage + "]";
+    }
+
+    @Override
+    public boolean isUsable() {
+        return false;
+    }
+
+    @Override
+    public boolean isWearable() {
+        return true;
+    }
+
+    public float getAttackPeriod() {
+        return attackPeriod;
+    }
+
+    public int getDamage() {
+        return MathUtils.random(minDamage, maxDamage);
+    }
+
+
+    public float getCritChance() {
+        return critChance;
+    }
+
+    public float getStanChance() {
+        return stunChance;
+    }
+
+    public float getBleedChance() {
+        return bleedChance;
+    }
+
+    public Weapon(String title, float attackPeriod, int minDamage, int maxDamage, float critChance, float stunChance, float bleedChance) {
+        this.title = title;
+        this.attackPeriod = attackPeriod;
+        this.minDamage = minDamage;
+        this.maxDamage = maxDamage;
+        this.critChance = critChance;
+        this.stunChance = stunChance;
+        this.bleedChance = bleedChance;
+    }
+// __title__,__att_period__,__min_dmg__,__max_dmg__,__crit_chance__,__stan_chance__,__bleed_chance__
+    public Weapon(String line){
+        String[] tokens = line.split(",");
+        this.title = tokens[0].trim();
+        this.attackPeriod = Float.parseFloat(tokens[1].trim());
+        this.minDamage = Integer.parseInt(tokens[2].trim());
+        this.maxDamage = Integer.parseInt(tokens[3].trim());
+        this.critChance = Float.parseFloat(tokens[4].trim());
+        this.stunChance = Float.parseFloat(tokens[5].trim());
+        this.bleedChance = Float.parseFloat(tokens[6].trim());
+    }
+}
+	
+==============================================================================================================================================================
+public class Monster extends Unit implements Poolable {
+//...
+ @Override
+    public void update(float dt) {
+        aiTimer += dt;
+        attackTime += dt;
+        regenTimer += dt;
+
+
+            if(this.stats.getEnd() < this.stats.getEndMax() && regenTimer > 1){
+                int regenMod = 2;
+                if(state == state.HUNT || state == state.WALK)
+                    regenMod /= 2;
+                this.stats.increaseEnd(regenMod * this.stats.getLevel());
+                this.regenTimer = 0f;
+            }
+
+            if(this.state == State.BLEED){
+                if(aiTimer > 1){
+                    takeDamage(gs.getHero(), 1, Color.WHITE);
+                    bleedTimer--;
+                    aiTimer = 0f;
+                }
+                if(bleedTimer == 0){
+                    state = State.values()[MathUtils.random(1, 2)];
+                }
+            }
+
+            if(this.state == State.STUN) {
+                if(aiTimer > 1){
+                    stunTimer--;
+                    aiTimer = 0f;
+                }
+                if (stunTimer == 0f) {
+                    state = State.values()[MathUtils.random(1, 2)];
+                }
+            }
+
+            else {
+
+                if (damageTimer > 0.0f) {
+                    damageTimer --;
+                }
+
+                if (aiTimer > aiTimerTo) {
+                    state = State.values()[MathUtils.random(1, 2)]; // IDLE or WALK
+                    aiTimer = 0.0f;
+                    aiTimerTo = MathUtils.random(2.0f, 4.0f);
+                    if (state == State.IDLE) {
+                        aiTimerTo /= 4.0f;
+                    }
+                    direction = Direction.values()[MathUtils.random(0, 3)];
+                }
+
+                if (state == State.HUNT) {
+                    if (Math.abs(target.getPosition().x - this.position.x) > 30.0f) {
+                        if (target.getPosition().x > this.position.x) {
+                            direction = Direction.RIGHT;
+                        }
+                        if (target.getPosition().x < this.position.x) {
+                            direction = Direction.LEFT;
+                        }
+                    }
+                    if (Math.abs(target.getPosition().y - this.position.y) > 30.0f) {
+                        if (target.getPosition().y > this.position.y) {
+                            direction = Direction.UP;
+                        }
+                        if (target.getPosition().y < this.position.y) {
+                            direction = Direction.DOWN;
+                        }
+                    }
+                }
+
+                if (this.state != State.IDLE) {
+                    tmp.set(position).add(direction.getX() * stats.getSpeed() * dt, direction.getY() * stats.getSpeed() * dt);
+                    if (gs.getMap().isCellPassable(tmp)) {
+                        position.set(tmp);
+                        walkTimer += dt;
+                        area.setPosition(position);
+                    }
+
+                    tryToAttack();
+                }
+            }
+    }
+
+
+
+    @Override
+    public void takeDamage(Unit attacker, int amount, Color color) {
+        super.takeDamage(attacker, amount, color);
+        if (MathUtils.random(0, 100) < 20 && this.state != State.BLEED ) {
+            stateToHunt(attacker);
+        }
+    }
+
+	
+
+
+
+

@@ -1,0 +1,98 @@
+=========================================================
+
+public abstract class Unit implements MapElement {
+//...
+    protected float regenTimer;
+    protected float runTimer;
+//...
+
+ public void takeDamage(Unit attacker, int amount, Color color) {
+//...
+	if (stats.getHp() <= 0) {
+            int exp = BattleCalc.calculateExp(attacker, this);
+            int score = BattleCalc.calculateScore(attacker, this);
+            gs.getHero().addExp(score);
+            attacker.getStats().addExp(exp);
+            gs.getInfoController().setup(attacker.getPosition().x, attacker.getPosition().y + 40, "exp +" + exp, Color.YELLOW);
+            gs.getPowerUpsController().setup(position.x, position.y, 1.2f, 2, stats.getLevel());
+        }
+    }
+}
+
+
+=========================================================
+
+enum State {
+    HUNT, IDLE, WALK, SPRINT
+}
+
+=========================================================
+
+public class Hero extends Unit {
+    private int score;
+
+//...
+
+	@Override
+    public void update(float dt) {
+        float speedMod = 1.0f;
+        attackTime += dt;
+
+        regenTimer += dt;
+        if(this.stats.getEnd() < this.stats.getEndMax() && regenTimer > 1){
+            int regenMod = 2;
+            if(isSprint())
+                regenMod = 0;
+            if(isMove())
+                regenMod /= 2;
+            this.stats.increaseEnd(regenMod * this.stats.getLevel());
+            this.regenTimer = 0f;
+        }
+
+	//...
+   }
+//...
+
+    public void attack() {
+        if (attackTime > weapon.getAttackPeriod()  && this.stats.getEnd() > 20) {   //надо  убрать "20" стоимость удара в оружие (тяжелое - больше урон, меленее и тяжелее бить)
+            this.stats.decreaseEnd(5);
+            attackTime = 0.0f;
+            tmp.set(position).add(direction.getX() * 60, direction.getY() * 60);
+            gs.getEffectController().setup(tmp.x, tmp.y, 0);
+            // soundSwordSwipe.play();
+            for (int i = 0; i < gs.getMonsterController().getActiveList().size(); i++) {
+                Monster m = gs.getMonsterController().getActiveList().get(i);
+                if (m.getArea().contains(tmp)) {
+                    m.takeDamage(this, BattleCalc.calculateDamage(this, m), Color.WHITE);
+                    break;
+                }
+            }
+        }
+    }
+    private boolean isMove(){
+        return Gdx.input.isKeyPressed(Input.Keys.RIGHT) || Gdx.input.isKeyPressed(Input.Keys.LEFT) || Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.DOWN);
+    }
+
+    private boolean isSprint(){
+        return isMove() && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT);
+    }
+}
+
+=========================================================
+
+public class BattleCalc {
+
+//...
+	public static int calculateScore(Unit attacker, Unit target){
+        int att = target.getStats().getAtt() - attacker.getStats().getAtt();
+        int def = target.getStats().getDef() - attacker.getStats().getDef();
+        int score = att + def;
+        if (score < 0){
+            score = 0;
+        }
+        return score;
+    }
+}
+
+=========================================================
+
